@@ -22,9 +22,5 @@ O modelo utilizado foi treinado em TensorFlow e salvo como `model_brain_tumor.h5
 
 ---
 
-## 📦 1. Instalação
-
-Clone o repositório (ou baixe os arquivos) e instale as dependências:
-
 
 
