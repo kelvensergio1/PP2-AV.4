@@ -1,0 +1,6 @@
+kaggle
+torch
+torchvision
+torchaudio
+streamlit
+pyngrok
