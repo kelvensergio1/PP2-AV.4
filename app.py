@@ -1,90 +1,98 @@
+# app.py
 import streamlit as st
-import torch
-import torch.nn as nn
-from torchvision import transforms
+import tensorflow as tf
+import numpy as np
 from PIL import Image
-from database import criar_tabela, registrar_interacao
+import sqlite3
 from datetime import datetime
 
 # ------------------------------------------------
-# 1. Carregar modelo treinado
+# 1. Carregar modelo treinado (cache para otimizar)
 # ------------------------------------------------
-class CNN(nn.Module):
-    def __init__(self):
-        super(CNN, self).__init__()
-        self.conv = nn.Sequential(
-            nn.Conv2d(1, 16, kernel_size=3, padding=1),
-            nn.ReLU(),
-            nn.MaxPool2d(2),
+@st.cache_resource
+def load_model():
+    return tf.keras.models.load_model("model_brain_tumor.h5")
 
-            nn.Conv2d(16, 32, kernel_size=3, padding=1),
-            nn.ReLU(),
-            nn.MaxPool2d(2)
+model = load_model()
+
+# ------------------------------------------------
+# 2. Banco de dados SQLite
+# ------------------------------------------------
+DB_NAME = "interacoes.db"
+
+def criar_tabela():
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS interacoes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            data_hora TEXT,
+            nome_arquivo TEXT,
+            predicao TEXT,
+            probabilidade REAL
         )
-        self.fc = nn.Sequential(
-            nn.Linear(32 * 7 * 7, 128),
-            nn.ReLU(),
-            nn.Linear(128, 2)
-        )
+    """)
+    conn.commit()
+    conn.close()
 
-    def forward(self, x):
-        x = self.conv(x)
-        x = x.view(x.size(0), -1)
-        return self.fc(x)
+def registrar_interacao(data_hora, nome_arquivo, predicao, prob):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO interacoes (data_hora, nome_arquivo, predicao, probabilidade)
+        VALUES (?, ?, ?, ?)
+    """, (data_hora, nome_arquivo, predicao, prob))
+    conn.commit()
+    conn.close()
 
-model = CNN()
-model.load_state_dict(torch.load("modelo_treinado.pth", map_location="cpu"))
-model.eval()
-
-# ------------------------------------------------
-# 2. Transforms
-# ------------------------------------------------
-transform = transforms.Compose([
-    transforms.Grayscale(),
-    transforms.Resize((28, 28)),
-    transforms.ToTensor()
-])
-
-# ------------------------------------------------
-# 3. Criar tabela no banco ao iniciar o app
-# ------------------------------------------------
 criar_tabela()
 
 # ------------------------------------------------
-# 4. Interface Streamlit
+# 3. Interface Streamlit
 # ------------------------------------------------
-st.title("Classificador de Imagens – Projeto PP2")
+st.title("Classificação de Tumores Cerebrais – Projeto PP2")
+st.write("Envie uma imagem de ressonância para identificar o tipo de tumor.")
 
-uploaded = st.file_uploader("Envie uma imagem JPG ou PNG", type=["jpg","png"])
+uploaded_file = st.file_uploader("Envie a imagem (JPG/PNG)", type=["jpg", "jpeg", "png"])
 
-if uploaded is not None:
-    img = Image.open(uploaded).convert("RGB")
-    st.image(img, caption="Imagem enviada", width=200)
+classes = ["glioma", "meningioma", "notumor", "pituitary"]
 
-    # Pré-processamento
-    img_tensor = transform(img).unsqueeze(0)
+if uploaded_file is not None:
+    img = Image.open(uploaded_file).convert("RGB")
+    st.image(img, caption="Imagem carregada", width=300)
 
-    with torch.no_grad():
-        output = model(img_tensor)
-        prob = torch.softmax(output, dim=1)
-        conf, predicted = torch.max(prob, 1)
+    # Pré-processamento igual ao treino
+    img_resized = img.resize((150, 150))
+    img_array = np.array(img_resized) / 255.0
+    img_array = np.expand_dims(img_array, axis=0)
 
-    classes = ["Classe 0", "Classe 1"]
-    predicao = classes[predicted.item()]
-    confianca = conf.item()
+    # Predição
+    predictions = model.predict(img_array)
+    class_idx = np.argmax(predictions)
+    predicao = classes[class_idx]
+    confianca = float(predictions[0][class_idx])
 
     st.subheader("Resultado:")
-    st.write(f"**Predição:** {predicao}")
+    st.write(f"**Predição:** {predicao.upper()}")
     st.write(f"**Confiança:** {confianca:.4f}")
 
-    # ------------------------------------------------
-    # 5. Registrar interação no banco
-    # ------------------------------------------------
+    # Registrar interação no banco
     registrar_interacao(
         datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        uploaded.name,
+        uploaded_file.name,
         predicao,
-        float(confianca)
+        confianca
     )
 
     st.success("Interação registrada no banco de dados!")
+
+# ------------------------------------------------
+# 4. Histórico das interações (opcional)
+# ------------------------------------------------
+if st.checkbox("Mostrar histórico de interações"):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM interacoes ORDER BY id DESC")
+    rows = cursor.fetchall()
+    conn.close()
+    st.write(rows)
