@@ -5,6 +5,7 @@ import numpy as np
 from PIL import Image
 import sqlite3
 from datetime import datetime
+from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
 
 # ------------------------------------------------
 # 1. Carregar modelo treinado (cache para otimizar)
@@ -55,16 +56,18 @@ st.write("Envie uma imagem de ressonância para identificar o tipo de tumor.")
 
 uploaded_file = st.file_uploader("Envie a imagem (JPG/PNG)", type=["jpg", "jpeg", "png"])
 
+# Ordem das classes conforme treino
 classes = ["glioma", "meningioma", "notumor", "pituitary"]
 
 if uploaded_file is not None:
     img = Image.open(uploaded_file).convert("RGB")
     st.image(img, caption="Imagem carregada", width=300)
 
-    # Pré-processamento igual ao treino
+    # Pré-processamento compatível com MobileNetV2
     img_resized = img.resize((150, 150))
-    img_array = np.array(img_resized) / 255.0
+    img_array = np.array(img_resized, dtype=np.float32)
     img_array = np.expand_dims(img_array, axis=0)
+    img_array = preprocess_input(img_array)
 
     # Predição
     predictions = model.predict(img_array)
