@@ -7,18 +7,18 @@ import sqlite3
 from datetime import datetime
 from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
 
-# ------------------------------------------------
-# 1. Carregar modelo treinado (cache para otimizar)
-# ------------------------------------------------
+
+# Carregar modelo treinado 
+
 @st.cache_resource
 def load_model():
     return tf.keras.models.load_model("model_brain_tumor.h5")
 
 model = load_model()
 
-# ------------------------------------------------
-# 2. Banco de dados SQLite
-# ------------------------------------------------
+
+# Banco de dados SQLite
+
 DB_NAME = "interacoes.db"
 
 def criar_tabela():
@@ -48,9 +48,9 @@ def registrar_interacao(data_hora, nome_arquivo, predicao, prob):
 
 criar_tabela()
 
-# ------------------------------------------------
-# 3. Interface Streamlit
-# ------------------------------------------------
+
+# Interface Streamlit
+
 st.title("Classificação de Tumores Cerebrais – Projeto PP2")
 st.write("Envie uma imagem de ressonância para identificar o tipo de tumor.")
 
@@ -89,9 +89,9 @@ if uploaded_file is not None:
 
     st.success("Interação registrada no banco de dados!")
 
-# ------------------------------------------------
-# 4. Histórico das interações (opcional)
-# ------------------------------------------------
+
+# Histórico das interações
+
 if st.checkbox("Mostrar histórico de interações"):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
